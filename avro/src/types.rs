@@ -44,6 +44,17 @@ fn max_prec_for_len(len: usize) -> Result<usize, Error> {
     Ok((2.0_f64.powi(8 * len - 1) - 1.0).log10().floor() as usize)
 }
 
+/// Create Decimal from String
+fn decimal_from_string(s: String, scale: usize) -> Result<Value, Error> {
+    let parts = s.split(".").collect::<Vec<&str>>();
+    if parts.len() > 1 && parts[1].len() > scale {
+        Err(Error::GetInvalidScale { scale })
+    } else {
+        let num = Decimal::from(s.as_bytes());
+        Ok(Value::Decimal(num))
+    }
+}
+
 /// A valid Avro value.
 ///
 /// More information about Avro values can be found in the [Avro
@@ -794,6 +805,11 @@ impl Value {
                 }
                 // check num.bits() here
             }
+            Value::Double(n) => decimal_from_string(n.to_string(), scale),
+            Value::Float(n) => decimal_from_string(n.to_string(), scale),
+            Value::Int(n) => decimal_from_string(n.to_string(), scale),
+            Value::Long(n) => decimal_from_string(n.to_string(), scale),
+            Value::String(s) => decimal_from_string(s, scale),
             Value::Fixed(_, bytes) | Value::Bytes(bytes) => {
                 if max_prec_for_len(bytes.len())? < precision {
                     Err(Error::ComparePrecisionAndSize {
