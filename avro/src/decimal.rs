@@ -16,6 +16,7 @@
 // under the License.
 
 use crate::{AvroResult, Error};
+use bigdecimal::FromPrimitive;
 use num_bigint::{BigInt, Sign};
 use serde::{de::SeqAccess, Deserialize, Serialize, Serializer};
 
@@ -91,6 +92,7 @@ impl Decimal {
     pub(crate) fn to_sign_extended_bytes_with_len(&self, len: usize) -> AvroResult<Vec<u8>> {
         let sign_byte = 0xFF * u8::from(self.value.sign() == Sign::Minus);
         let mut decimal_bytes = vec![sign_byte; len];
+
         let raw_bytes = self.value.to_signed_bytes_be();
         let num_raw_bytes = raw_bytes.len();
         let start_byte_index = len.checked_sub(num_raw_bytes).ok_or(Error::SignExtend {
@@ -98,7 +100,22 @@ impl Decimal {
             needed: num_raw_bytes,
         })?;
         decimal_bytes[start_byte_index..].copy_from_slice(&raw_bytes);
+
         Ok(decimal_bytes)
+    }
+    pub(crate) fn convert_bytes_to_i64_with_scale_2(
+        bytes_ref: &[u8],
+    ) -> Result<i64, std::num::ParseIntError> {
+        // Convert the byte slice to a string
+        let s = std::str::from_utf8(bytes_ref).expect("Invalid UTF-8");
+        // Ensure the scale is == scale by adjusting the string
+        let s_no_decimal = if !s.contains('.') {
+            format!("{}.00", s).replace(".", "") // Add ".00" if there's no decimal
+        } else {
+            s.replace(".", "")
+        };
+        // Parse the resulting string as an i64
+        s_no_decimal.parse::<i64>()
     }
 }
 
@@ -145,10 +162,18 @@ impl std::convert::TryFrom<Decimal> for Vec<u8> {
 impl<T: AsRef<[u8]>> From<T> for Decimal {
     fn from(bytes: T) -> Self {
         let bytes_ref = bytes.as_ref();
+        let scale = 2;
+        let e = Decimal::convert_bytes_to_i64_with_scale_2(bytes_ref).unwrap();
         Self {
+            value: BigInt::from_i64(e).expect("Conversion to BigInt failed"),
+            len: scale,
+        }
+        /*
+         Self {
             value: BigInt::from_signed_bytes_be(bytes_ref),
             len: bytes_ref.len(),
         }
+        */
     }
 }
 

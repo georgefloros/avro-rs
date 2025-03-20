@@ -26,7 +26,7 @@ use crate::{
     util::{zig_i32, zig_i64},
     AvroResult,
 };
-use log::error;
+use log::{debug, error};
 use std::{borrow::Borrow, collections::HashMap, io::Write};
 
 /// Encode a `Value` into avro format.
@@ -70,7 +70,6 @@ pub(crate) fn encode_internal<W: Write, S: Borrow<Schema>>(
             .ok_or(Error::SchemaResolutionError(fully_qualified_name))?;
         return encode_internal(value, resolved.borrow(), names, enclosing_namespace, writer);
     }
-
     match value {
         Value::Null => {
             if let Schema::Union(union) = schema {
@@ -99,20 +98,27 @@ pub(crate) fn encode_internal<W: Write, S: Borrow<Schema>>(
         Value::Float(x) => writer.write(&x.to_le_bytes()).map_err(Error::WriteBytes),
         Value::Double(x) => writer.write(&x.to_le_bytes()).map_err(Error::WriteBytes),
         Value::Decimal(decimal) => match schema {
-            Schema::Decimal(DecimalSchema { inner, .. }) => match *inner.clone() {
-                Schema::Fixed(FixedSchema { size, .. }) => {
-                    let bytes = decimal.to_sign_extended_bytes_with_len(size).unwrap();
-                    let num_bytes = bytes.len();
-                    if num_bytes != size {
-                        return Err(Error::EncodeDecimalAsFixedError(num_bytes, size));
+            Schema::Decimal(DecimalSchema { inner, .. }) => {
+                println!("Encoding value: {:?} with schema: {:?}", value, schema);
+                println!("Encoding decimal value: {:?}", decimal);
+                match *inner.clone() {
+                    Schema::Fixed(FixedSchema { size, .. }) => {
+                        let bytes = decimal.to_sign_extended_bytes_with_len(size).unwrap();
+                        let num_bytes = bytes.len();
+                        if num_bytes != size {
+                            return Err(Error::EncodeDecimalAsFixedError(num_bytes, size));
+                        }
+                        encode(&Value::Fixed(size, bytes), inner, writer)
                     }
-                    encode(&Value::Fixed(size, bytes), inner, writer)
+                    Schema::Bytes => {
+                        println!("Encoding decimal value Bytes: {:?}", decimal);
+                        encode(&Value::Bytes(decimal.try_into()?), inner, writer)
+                    }
+                    _ => Err(Error::ResolveDecimalSchema(SchemaKind::from(
+                        *inner.clone(),
+                    ))),
                 }
-                Schema::Bytes => encode(&Value::Bytes(decimal.try_into()?), inner, writer),
-                _ => Err(Error::ResolveDecimalSchema(SchemaKind::from(
-                    *inner.clone(),
-                ))),
-            },
+            }
             _ => Err(Error::EncodeValueAsSchemaError {
                 value_kind: ValueKind::Decimal,
                 supported_schema: vec![SchemaKind::Decimal],
