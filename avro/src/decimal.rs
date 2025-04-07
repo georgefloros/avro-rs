@@ -108,14 +108,24 @@ impl Decimal {
     ) -> Result<i64, std::num::ParseIntError> {
         // Convert the byte slice to a string
         let s = std::str::from_utf8(bytes_ref).expect("Invalid UTF-8");
-        // Ensure the scale is == scale by adjusting the string
-        let s_no_decimal = if !s.contains('.') {
-            format!("{}.00", s).replace(".", "") // Add ".00" if there's no decimal
+        // Split the string by the decimal point.  This is crucial.
+        let parts: Vec<&str> = s.split('.').collect();
+
+        let whole_part = if parts.len() > 0 { parts[0] } else { "0" };
+        let fractional_part = if parts.len() > 1 {
+            if parts[1].len() == 1 {
+                format!("{}0", parts[1])
+            } else {
+                parts[1].to_string()
+            }
         } else {
-            s.replace(".", "")
+            "00".to_string() //Ensure 2 decimal places
         };
-        // Parse the resulting string as an i64
-        s_no_decimal.parse::<i64>()
+        // Combine the whole and fractional parts to ensure 2 decimal places
+        let combined: String = format!("{}{}", whole_part, fractional_part);
+        print!("combined: {}", combined);
+        // Parse as an i64
+        combined.parse::<i64>()
     }
 }
 
