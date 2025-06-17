@@ -121,9 +121,12 @@ impl Decimal {
         } else {
             "00".to_string() //Ensure 2 decimal places
         };
+
+        println!("whole_part: {}", whole_part);
+        println!("fractional_part: {}", fractional_part);
         // Combine the whole and fractional parts to ensure 2 decimal places
         let combined: String = format!("{}{}", whole_part, fractional_part);
-        print!("combined: {}", combined);
+        println!("combined: {}", combined);
         // Parse as an i64
         combined.parse::<i64>()
     }
@@ -172,12 +175,9 @@ impl std::convert::TryFrom<Decimal> for Vec<u8> {
 impl<T: AsRef<[u8]>> From<T> for Decimal {
     fn from(bytes: T) -> Self {
         let bytes_ref = bytes.as_ref();
-        let scale = 2;
         let e = Decimal::convert_bytes_to_i64_with_scale_2(bytes_ref).unwrap();
-        Self {
-            value: BigInt::from_i64(e).expect("Conversion to BigInt failed"),
-            len: scale,
-        }
+        let bi = BigInt::from_i64(e).expect("Conversion to BigInt failed");
+        Self { value: bi, len: 8 }
         /*
          Self {
             value: BigInt::from_signed_bytes_be(bytes_ref),
